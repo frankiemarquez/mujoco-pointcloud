@@ -1,0 +1,101 @@
+<mujoco model="pointcloud_scene">
+  <!-- Ground/skybox setup follows the style of the MuJoCo basics tutorial
+       (tippe-top / free-body examples): a checkered "grid" material built
+       from a builtin checker texture, referenced by name from a floor geom. -->
+  <include file="franka_emika_panda/panda.xml"/>
+
+  <option gravity="0 0 -9.81" timestep="0.002"/>
+
+  <visual>
+    <headlight ambient="0.2 0.2 0.2" diffuse="0.15 0.15 0.15" specular="0.05 0.05 0.05"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="120" elevation="-20"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture name="grid" type="2d" builtin="checker" rgb1=".1 .2 .3" rgb2=".2 .3 .4"
+     width="300" height="300" mark="edge" markrgb=".8 .8 .8"/>
+    <material name="grid" texture="grid" texrepeat="6 6" texuniform="true" reflectance=".2"/>
+
+    <material name="red_mat" rgba="0.85 0.15 0.15 1" specular="0.4" shininess="0.3"/>
+    <material name="green_mat" rgba="0.15 0.75 0.25 1" specular="0.4" shininess="0.3"/>
+    <material name="blue_mat" rgba="0.15 0.35 0.9 1" specular="0.4" shininess="0.3"/>
+    <material name="yellow_mat" rgba="0.9 0.8 0.1 1" specular="0.4" shininess="0.3"/>
+    <material name="purple_mat" rgba="0.6 0.2 0.75 1" specular="0.4" shininess="0.3"/>
+    <material name="orange_mat" rgba="0.9 0.5 0.1 1" specular="0.4" shininess="0.3"/>
+    <material name="table_mat" rgba="0.5 0.35 0.25 1" specular="0.2" shininess="0.1"/>
+  </asset>
+
+  <default>
+    <!-- Applies only to our own un-classed elements (table, objects, mocap
+         rigs) -- the included Panda fully overrides these via its own
+         childclass="panda" defaults, so this doesn't affect the arm. -->
+    <joint damping="1.2" armature="0.05"/>
+    <geom contype="1" conaffinity="1" friction="0.9 0.02 0.001"/>
+  </default>
+
+  <worldbody>
+    <light name="top_light" pos="0 0 3" dir="0 0 -1" diffuse="0.7 0.7 0.7" specular="0.3 0.3 0.3" directional="true"/>
+    <light name="fill_light" pos="1.5 -1.5 2" dir="-1 1 -1" diffuse="0.35 0.35 0.35" directional="true"/>
+
+    <geom name="floor" type="plane" size="3 3 0.1" material="grid"/>
+
+    <!-- Table, in front of the Panda (which sits at the world origin, as
+         in the mjctrl/menagerie tutorial scenes) -->
+    <body name="table" pos="0.55 0 0.2">
+      <geom type="box" size="0.35 0.35 0.02" material="table_mat"/>
+      <geom type="box" size="0.02 0.02 0.2" pos="0.3 0.3 -0.2" material="table_mat"/>
+      <geom type="box" size="0.02 0.02 0.2" pos="-0.3 0.3 -0.2" material="table_mat"/>
+      <geom type="box" size="0.02 0.02 0.2" pos="0.3 -0.3 -0.2" material="table_mat"/>
+      <geom type="box" size="0.02 0.02 0.2" pos="-0.3 -0.3 -0.2" material="table_mat"/>
+    </body>
+
+    <!-- Free objects (a "few objects" on / around the table) -->
+    <body name="box_red" pos="0.45 0.15 0.27">
+      <freejoint/>
+      <geom type="box" size="0.045 0.045 0.045" material="red_mat"/>
+    </body>
+
+    <body name="sphere_green" pos="0.6 -0.15 0.27">
+      <freejoint/>
+      <geom type="sphere" size="0.045" material="green_mat"/>
+    </body>
+
+    <body name="cylinder_blue" pos="0.7 0.1 0.28">
+      <freejoint/>
+      <geom type="cylinder" size="0.04 0.06" material="blue_mat"/>
+    </body>
+
+    <body name="box_yellow" pos="0.5 -0.05 0.27">
+      <freejoint/>
+      <geom type="box" size="0.035 0.035 0.06" material="yellow_mat"/>
+    </body>
+
+    <body name="capsule_purple" pos="0.4 -0.25 0.28">
+      <freejoint/>
+      <geom type="capsule" size="0.03 0.06" material="purple_mat"/>
+    </body>
+
+    <body name="sphere_orange" pos="0.65 0.28 0.27">
+      <freejoint/>
+      <geom type="sphere" size="0.04" material="orange_mat"/>
+    </body>
+
+    <!-- Mocap target for future IK demos (same pattern as mjctrl's
+         franka_emika_panda/scene.xml: a free-floating target the
+         end-effector can be commanded to track). Not driven by default. -->
+    <body name="ik_target" pos="0.5 0 0.5" quat="0 1 0 0" mocap="true">
+      <geom type="box" size=".03 .03 .03" contype="0" conaffinity="0" rgba=".6 .3 .3 .5"/>
+      <site type="sphere" size="0.01" rgba="0 0 1 1" group="1"/>
+    </body>
+
+    <!-- Point-cloud capture camera, mounted on a mocap body so its pose can
+         be driven directly (position + quaternion) from the keyboard
+         controller each frame, independent of physics. -->
+    <body name="cam_rig" mocap="true" pos="1.4 -1.1 1.1" quat="0.79430126 0.48893306 0.18902488 0.30708233">
+      <geom type="box" size="0.03 0.05 0.03" rgba="0.9 0.9 0.1 0.6" contype="0" conaffinity="0"/>
+      <camera name="scene_cam" fovy="50"/>
+    </body>
+  </worldbody>
+</mujoco>
