@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 import imageio.v2 as imageio
 
 from pointcloud_utils import capture_pointcloud, render_rgbd
-from scene_setup import reset_to_home
+from scene_setup import reset_to_home, disable_shadows
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "proof")
 os.makedirs(OUT_DIR, exist_ok=True)
@@ -35,6 +35,7 @@ os.makedirs(OUT_DIR, exist_ok=True)
 model = mujoco.MjModel.from_xml_path(os.path.join(os.path.dirname(__file__), "scene.xml"))
 data = mujoco.MjData(model)
 reset_to_home(model, data)  # Panda in 'home' pose, objects settled
+disable_shadows(model)  # ~5x faster offscreen capture (see scene_setup.py)
 
 renderer = mujoco.Renderer(model, height=480, width=640)
 

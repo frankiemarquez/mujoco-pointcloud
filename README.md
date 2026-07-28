@@ -113,6 +113,15 @@ pseudo-inverse can blow up. The target position is clamped to a
 comfortable workspace box (`ArmIKController.bounds`) so you can't drive it
 into the floor or out of reach.
 
+> **Bug fixed:** an earlier version of `ArmIKController` reset the target's
+> orientation to identity `[1,0,0,0]` at startup, overwriting the correct
+> top-down orientation (`quat="0 1 0 0"`, the standard 180°-about-X "point
+> straight down at the table" convention for a Franka gripper) already
+> declared on `ik_target` in `scene.xml`. That pointed the gripper's
+> approach axis straight *up* instead of down — it wasn't a style choice,
+> just a bug. Fixed by leaving the mocap body's orientation alone at
+> construction time; `ArmIKController` only ever writes to `self.pos`.
+
 **Null-space control** (matching mjctrl's `diffik_nullspace.py`, not just
 `diffik.py`) is also included: the Panda has 7 joints but a position
 target only constrains 3, so infinitely many joint configurations reach
@@ -135,12 +144,26 @@ The gripper keys moved from `J`/`K` in an earlier version of this project
 to `N`/`M`, to free up `I/J/K/L` for the arm's now-classic four-direction
 jog layout.
 
-The point cloud updates at up to `--stream_hz` (default 12 Hz); use
-`--width/--height` to trade resolution for speed, e.g.:
+The point cloud updates at up to `--stream_hz` (default 12 Hz, capped by
+actual render speed -- see performance note below); use `--width/--height`
+to trade resolution for speed, e.g.:
 
 ```bash
 python3 interactive_pointcloud.py --width 320 --height 240 --stream_hz 15
 ```
+
+**Performance note:** the Panda's real mesh geometry made this feel quite
+sluggish in an earlier version of this project (~580ms per point-cloud
+capture, capping the app around ~1.7 Hz no matter what `--stream_hz` or
+`--width/--height` were set to). Profiling found the bottleneck wasn't
+resolution — a 16x change in pixel count barely moved render time — it was
+**shadow map generation** (`model.vis.quality.shadowsize=4096` combined
+with thousands of mesh triangles). `scene_setup.disable_shadows()` turns
+off shadow casting for the offscreen capture renderer specifically (not
+applied to `panda_ik_demo.py`'s exported video, where shadows are purely
+cosmetic and worth keeping) — this alone gives roughly a 4x speedup
+(~150ms/capture, up to ~6.6 Hz achievable) with no effect on point cloud
+correctness, since depth data doesn't depend on shadow rendering at all.
 
 ## Headless verification (what was actually run while building this)
 

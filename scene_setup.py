@@ -31,6 +31,24 @@ PANDA_HOME_CTRL = np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853, 255])
 PANDA_NQ = 9  # number of Panda generalized coordinates (must match above)
 
 
+def disable_shadows(model: mujoco.MjModel):
+    """Turn off shadow casting for every light in the model.
+
+    Matters a lot here: this model's default shadow map is 4096px
+    (`model.vis.quality.shadowsize`), and combined with the Panda's dense
+    real mesh geometry (thousands of triangles per link), shadow rendering
+    dominates offscreen render cost -- ~580ms/frame with shadows on vs.
+    ~120ms/frame with them off (measured on this project's dev machine;
+    resolution barely mattered, shadows were the actual bottleneck). Since
+    point-cloud capture only needs plausible per-pixel color (not
+    physically-accurate shadowing), this is a ~5x speedup with no real
+    downside for that use case. Not applied by default to
+    `panda_ik_demo.py`'s exported video, where shadows are purely
+    cosmetic and worth keeping.
+    """
+    model.light_castshadow[:] = 0
+
+
 def reset_to_home(model: mujoco.MjModel, data: mujoco.MjData, settle_steps: int = 300):
     """Reset `data` to: Panda in its bent 'home' pose, every free object at
     its XML-declared starting position (NOT via mj_resetDataKeyframe -- see

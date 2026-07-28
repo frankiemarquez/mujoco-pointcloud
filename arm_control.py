@@ -55,7 +55,14 @@ class ArmIKController:
         self.site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, site_name)
 
         self.pos = np.array(data.mocap_pos[self.mocap_id], dtype=float)
-        data.mocap_quat[self.mocap_id] = np.array([1, 0, 0, 0])  # fixed orientation
+        # NOTE: orientation is intentionally left as whatever scene.xml
+        # declares for this mocap body (quat="0 1 0 0" -- the standard
+        # 180deg-about-X "point straight down at the table" orientation for
+        # a Franka gripper), NOT overwritten here. An earlier version of
+        # this file reset it to identity [1,0,0,0], which pointed the
+        # gripper's approach axis straight UP instead of down -- a real bug,
+        # not a style choice. This class holds orientation fixed at
+        # whatever it is when constructed; it only ever changes `self.pos`.
 
         self.move_speed = move_speed
         self.damping = damping

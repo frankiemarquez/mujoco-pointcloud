@@ -52,7 +52,7 @@ import open3d as o3d
 from camera_rig import CameraRig
 from arm_control import ArmIKController
 from pointcloud_utils import capture_pointcloud
-from scene_setup import reset_to_home, PANDA_HOME_CTRL
+from scene_setup import reset_to_home, disable_shadows, PANDA_HOME_CTRL
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "scene.xml")
 
@@ -102,6 +102,7 @@ def main():
     model = mujoco.MjModel.from_xml_path(MODEL_PATH)
     data = mujoco.MjData(model)
     reset_to_home(model, data)  # Panda in 'home' pose, objects settled onto table
+    disable_shadows(model)  # ~5x faster offscreen capture (see scene_setup.py)
 
     rig = CameraRig(model, data)
     arm = ArmIKController(model, data)

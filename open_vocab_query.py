@@ -30,7 +30,7 @@ import open3d as o3d
 from pointcloud_utils import capture_pointcloud_with_pixels
 from segmentation_utils import segment_objects
 from open_vocab import get_matcher
-from scene_setup import reset_to_home
+from scene_setup import reset_to_home, disable_shadows
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "scene.xml")
 
@@ -41,6 +41,7 @@ def run_query(query: str, camera: str = "scene_cam", topk: int = 1,
     model = mujoco.MjModel.from_xml_path(MODEL_PATH)
     data = mujoco.MjData(model)
     reset_to_home(model, data, settle_steps=settle_steps)  # Panda home pose, objects settled
+    disable_shadows(model)  # ~5x faster offscreen capture (see scene_setup.py)
 
     renderer = mujoco.Renderer(model, height=height, width=width)
     points, colors, pixels, rgb = capture_pointcloud_with_pixels(

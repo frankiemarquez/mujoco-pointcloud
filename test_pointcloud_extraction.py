@@ -27,7 +27,7 @@ import mujoco
 import open3d as o3d
 
 from pointcloud_utils import capture_pointcloud
-from scene_setup import reset_to_home
+from scene_setup import reset_to_home, disable_shadows
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "scene.xml")
 
@@ -35,6 +35,7 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "scene.xml")
 model = mujoco.MjModel.from_xml_path(MODEL_PATH)
 data = mujoco.MjData(model)
 reset_to_home(model, data)  # Panda in 'home' pose, objects settled
+disable_shadows(model)  # ~5x faster offscreen capture (see scene_setup.py)
 
 renderer = mujoco.Renderer(model, height=480, width=640)
 
