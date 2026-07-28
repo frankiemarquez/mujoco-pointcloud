@@ -29,7 +29,13 @@ tutorial uses for `media.show_video` -- here `media.write_video` since
 there's no notebook to display inline into).
 """
 import os
-os.environ.setdefault("MUJOCO_GL", "egl")
+import sys
+if sys.platform.startswith("linux"):
+    # EGL is a Linux-only offscreen backend; on macOS/Windows, let mujoco
+    # pick its own default (setting MUJOCO_GL=egl there raises at import
+    # time) -- only needed for this project's original headless Linux
+    # dev sandbox.
+    os.environ.setdefault("MUJOCO_GL", "egl")
 
 import numpy as np
 import mujoco

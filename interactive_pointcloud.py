@@ -31,8 +31,15 @@ Controls (Open3D window must have focus)
   Q / E            roll camera                        (held)
   C                toggle continuous point-cloud streaming (on by default)
   Space            force a single point-cloud capture (useful if C is off)
-  J / K            open / close the gripper (Panda's tendon-coupled fingers)
+  I / K            move arm end effector +X / -X      (held)
+  J / L            move arm end effector -Y / +Y      (held)
+  U / O            move arm end effector up / down     (held)
+  N / M            open / close the gripper (Panda's tendon-coupled fingers)
   Esc              quit
+
+Arm control is differential IK (see `arm_control.ArmIKController`, same
+math as `panda_ik_demo.py`): I/J/K/L/U/O jog a Cartesian target the arm's
+end effector then tracks every frame.
 """
 import os
 import time
@@ -43,6 +50,7 @@ import mujoco
 import open3d as o3d
 
 from camera_rig import CameraRig
+from arm_control import ArmIKController
 from pointcloud_utils import capture_pointcloud
 from scene_setup import reset_to_home, PANDA_HOME_CTRL
 
@@ -57,19 +65,28 @@ class GLFW:
     PRESS, RELEASE, REPEAT = 1, 0, 2
     KEY_SPACE = 32
     KEY_A, KEY_C, KEY_D, KEY_E, KEY_F = 65, 67, 68, 69, 70
-    KEY_J, KEY_K, KEY_Q, KEY_R, KEY_S, KEY_W = 74, 75, 81, 82, 83, 87
+    KEY_I, KEY_J, KEY_K, KEY_L = 73, 74, 75, 76
+    KEY_M, KEY_N, KEY_O, KEY_Q = 77, 78, 79, 81
+    KEY_R, KEY_S, KEY_U, KEY_W = 82, 83, 85, 87
     KEY_RIGHT, KEY_LEFT, KEY_DOWN, KEY_UP = 262, 263, 264, 265
 
 
 glfw = GLFW  # keeps the rest of the file's `glfw.XXX` references unchanged
 
-# GLFW key macros -> our rig's key names. Open3D re-uses GLFW key codes.
-HELD_KEYS = {
+# GLFW key macros -> our camera rig's key names.
+CAMERA_HELD_KEYS = {
     glfw.KEY_W: "W", glfw.KEY_S: "S", glfw.KEY_A: "A", glfw.KEY_D: "D",
     glfw.KEY_R: "R", glfw.KEY_F: "F",
     glfw.KEY_Q: "Q", glfw.KEY_E: "E",
     glfw.KEY_LEFT: "LEFT", glfw.KEY_RIGHT: "RIGHT",
     glfw.KEY_UP: "UP", glfw.KEY_DOWN: "DOWN",
+}
+
+# GLFW key macros -> our arm controller's key names.
+ARM_HELD_KEYS = {
+    glfw.KEY_I: "I", glfw.KEY_K: "K",
+    glfw.KEY_J: "J", glfw.KEY_L: "L",
+    glfw.KEY_U: "U", glfw.KEY_O: "O",
 }
 
 
@@ -87,6 +104,7 @@ def main():
     reset_to_home(model, data)  # Panda in 'home' pose, objects settled onto table
 
     rig = CameraRig(model, data)
+    arm = ArmIKController(model, data)
     renderer = mujoco.Renderer(model, height=args.height, width=args.width)
 
     # Gripper actuator (actuator8) uses ctrlrange 0-255 via a tendon coupling
@@ -100,7 +118,7 @@ def main():
 
     # ---- Open3D window + geometry -------------------------------------
     vis = o3d.visualization.VisualizerWithKeyCallback()
-    vis.create_window(window_name="Live Colorized Point Cloud (WASD/RF/QE/Arrows to move)",
+    vis.create_window(window_name="Live Colorized Point Cloud (WASD/RF/QE/Arrows=camera, IJKLUO=arm, N/M=gripper)",
                        width=1000, height=750)
 
     pcd = o3d.geometry.PointCloud()
@@ -116,17 +134,19 @@ def main():
     view_initialized = {"done": False}
 
     # ---- Held-key (press/repeat/release) callbacks ---------------------
-    def make_hold_callback(name):
+    def make_hold_callback(controller, name):
         def cb(_vis, action, _mods):
             if action in (glfw.PRESS, glfw.REPEAT):
-                rig.key_down(name)
+                controller.key_down(name)
             elif action == glfw.RELEASE:
-                rig.key_up(name)
+                controller.key_up(name)
             return False
         return cb
 
-    for keycode, name in HELD_KEYS.items():
-        vis.register_key_action_callback(keycode, make_hold_callback(name))
+    for keycode, name in CAMERA_HELD_KEYS.items():
+        vis.register_key_action_callback(keycode, make_hold_callback(rig, name))
+    for keycode, name in ARM_HELD_KEYS.items():
+        vis.register_key_action_callback(keycode, make_hold_callback(arm, name))
 
     # ---- Tap (press-only) callbacks ------------------------------------
     def toggle_continuous(_vis):
@@ -148,8 +168,8 @@ def main():
 
     vis.register_key_callback(glfw.KEY_C, toggle_continuous)
     vis.register_key_callback(glfw.KEY_SPACE, capture_once)
-    vis.register_key_callback(glfw.KEY_J, gripper_open)
-    vis.register_key_callback(glfw.KEY_K, gripper_close)
+    vis.register_key_callback(glfw.KEY_N, gripper_open)
+    vis.register_key_callback(glfw.KEY_M, gripper_close)
 
     # ---- Per-frame animation callback: physics + camera + point cloud --
     def animation_callback(vis):
@@ -160,6 +180,7 @@ def main():
         data.ctrl[7] = state["gripper"]  # actuator8: tendon-coupled gripper, 0-255
 
         rig.step(dt)
+        arm.step(dt)
         mujoco.mj_step(model, data)
 
         do_capture = state["continuous"] or state["capture_once"]
@@ -178,7 +199,10 @@ def main():
 
     vis.register_animation_callback(animation_callback)
 
-    print("Open3D window ready. Click it for keyboard focus, then use WASD/RF/QE/Arrows.")
+    print("Open3D window ready. Click it for keyboard focus.")
+    print("  Camera: WASD/RF move, arrows yaw/pitch, Q/E roll")
+    print("  Arm:    I/K +-X, J/L +-Y, U/O up/down (differential IK)")
+    print("  Gripper: N open, M close")
     vis.run()
     vis.destroy_window()
 

@@ -25,6 +25,7 @@ was carried over verbatim vs. adapted.
 | `scene_setup.py` | `reset_to_home()` — the *correct* way to reset this scene (Panda in its bent 'home' pose, objects at their real starting positions). Don't use `mj_resetDataKeyframe` on this model — see the module docstring. |
 | `pointcloud_utils.py` | Core RGB-D → colorized point cloud math (intrinsics, camera pose, unprojection). |
 | `camera_rig.py` | A free-flying camera controller (`CameraRig`) that turns held keys into a live pose written to the mocap body each frame. |
+| `arm_control.py` | A keyboard-driven Cartesian arm controller (`ArmIKController`) -- jogs a target position, tracks it via damped-least-squares differential IK each frame. |
 | `interactive_pointcloud.py` | **Main app.** One Open3D window: live keyboard-controlled point cloud + gripper control. |
 | `view_scene.py` | MuJoCo's own native viewer (mouse-controlled) for just looking around the model, including a Control panel to jog the Panda's joints directly. |
 | `panda_ik_demo.py` | Differential IK demo in the style of the manipulation tutorial: a circular target trajectory tracked via `mj_jacSite` + pseudo-inverse, with target/end-effector traces drawn in the scene. Writes `panda_ik_demo.mp4`. |
@@ -85,14 +86,54 @@ is no separate MuJoCo GUI window.
 | `←` / `→` | Yaw (held) |
 | `↑` / `↓` | Pitch (held) |
 | `Q` / `E` | Roll (held) |
+| `I` / `K` | Move **arm** end effector +X / -X (held) |
+| `J` / `L` | Move **arm** end effector -Y / +Y (held) |
+| `U` / `O` | Move **arm** end effector up / down (held) |
+| `N` / `M` | Open / close the gripper (Panda's tendon-coupled fingers, ctrl range 0-255) |
 | `C` | Toggle continuous point-cloud streaming (on by default) |
 | `Space` | Force one capture (useful if streaming is paused) |
-| `J` / `K` | Open / close the gripper (Panda's tendon-coupled fingers, ctrl range 0-255) |
 | `Esc` | Quit |
 
-`W/A/S/D/R/F/Q/E` and the arrow keys are **held-key** controls (powered by
-Open3D's `register_key_action_callback`, which reports press/repeat/release
-— not just taps), so movement is smooth and continuous while a key is down.
+`W/A/S/D/R/F/Q/E`, the arrow keys, and `I/J/K/L/U/O` are all **held-key**
+controls (powered by Open3D's `register_key_action_callback`, which reports
+press/repeat/release — not just taps), so movement is smooth and continuous
+while a key is down.
+
+**Arm control** (`arm_control.ArmIKController`) works by jogging a Cartesian
+target position and running one differential-IK step every frame to drive
+the Panda's 7 arm joints toward it — same core math as `panda_ik_demo.py`
+and, further upstream, Kevin Zakka's
+[mjctrl](https://github.com/kevinzakka/mjctrl) `diffik.py`: position error →
+`mj_jacSite` → damped least-squares → `mj_integratePos`. Unlike
+`panda_ik_demo.py`'s plain pseudo-inverse (fine for a gentle scripted
+circle), this uses **damped** least-squares (Buss 2009 — the same paper
+mjctrl cites) since keyboard jogging is more likely to push toward
+workspace edges / near-singular configurations, where a plain
+pseudo-inverse can blow up. The target position is clamped to a
+comfortable workspace box (`ArmIKController.bounds`) so you can't drive it
+into the floor or out of reach.
+
+**Null-space control** (matching mjctrl's `diffik_nullspace.py`, not just
+`diffik.py`) is also included: the Panda has 7 joints but a position
+target only constrains 3, so infinitely many joint configurations reach
+the same point — plain IK has no preference among them, so jogging the
+target around can drift the arm into a valid-but-visually-awkward
+"elbow-flipped" pose. `ArmIKController` adds a secondary task that pulls
+joints back toward the natural home configuration, projected into
+whatever directions don't interfere with tracking the target (with wrist
+joints weighted more strongly, since those visibly rotate the gripper).
+This is a real trade-off, not a free lunch: because the *damped*
+pseudo-inverse's null-space projector is only approximate (not exact, the
+way a plain Moore-Penrose pseudo-inverse's would be), a strong null-space
+gain measurably leaks into tracking accuracy. The default gain here was
+tuned to keep tracking error comparable to the no-null-space baseline
+while still visibly improving posture — turn `nullspace_gain` up for a
+more consistently "home-like" pose at the cost of some tracking precision,
+or down for tighter tracking at the cost of occasional awkward poses.
+
+The gripper keys moved from `J`/`K` in an earlier version of this project
+to `N`/`M`, to free up `I/J/K/L` for the arm's now-classic four-direction
+jog layout.
 
 The point cloud updates at up to `--stream_hz` (default 12 Hz); use
 `--width/--height` to trade resolution for speed, e.g.:
@@ -102,6 +143,12 @@ python3 interactive_pointcloud.py --width 320 --height 240 --stream_hz 15
 ```
 
 ## Headless verification (what was actually run while building this)
+
+> **Platform note:** `MUJOCO_GL=egl` below is a Linux-only offscreen
+> rendering backend. On macOS/Windows, just drop that prefix and run the
+> script plain (e.g. `python3 test_capture.py`) — the scripts only apply
+> the `egl` default when `sys.platform` is Linux, so they're safe to run
+> as-is on any OS.
 
 This was developed in a container with **no display** attached, so the
 interactive dual-window app (`interactive_pointcloud.py`) could not be
